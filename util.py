@@ -1,7 +1,6 @@
 from io import StringIO
 import numpy as np
 import folium as f
-from pyzbar.pyzbar import decode
 from PIL import Image
 import requests
 
@@ -72,6 +71,7 @@ def drawRoute(coords):
     
 
 def parseBarcode(img_file_buffer):
+    from pyzbar.pyzbar import decode
     if img_file_buffer is None: 
         return None
     codes = decode(Image.open(img_file_buffer))
