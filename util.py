@@ -65,7 +65,7 @@ def drawRoute(coords):
     for x, y in coords:
         f.Circle((x, y), 10).add_to(m)
 
-    fileName = 'map.html'
+    fileName = 'temp/map.html'
     m.save(fileName)
     with open(fileName) as file:
         return file.read()
