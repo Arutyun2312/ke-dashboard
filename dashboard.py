@@ -12,7 +12,7 @@ class DashboardType(StrEnum):
 st.set_page_config(layout="wide")
 
 with st.sidebar:
-    st.title('Navigation')
+    st.title('Dashboard Navigation')
     dashboardType = st.radio(
         "Choose a dashboard",
         (DashboardType.courier, DashboardType.movie)

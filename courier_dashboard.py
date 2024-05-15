@@ -1,9 +1,11 @@
 from functools import reduce
 import pandas as pd
+import requests
 import streamlit as st
 import util
 import streamlit.components.v1 as components
 import altair as alt
+from bs4 import BeautifulSoup
 
 def run():
     # Cache the data fetching and processing to optimize performance
@@ -13,43 +15,11 @@ def run():
         # df = 'data/delivery_sh.csv'
 
         df = pd.read_csv(df)
-        df['delivery_gps_time'] = df['delivery_gps_time'].apply(lambda d : '2023-' + d)
-        df['delivery_gps_time'] = pd.to_datetime(df['delivery_gps_time'])
+        df['accept_time'] = pd.to_datetime(df['accept_time'], format='%m-%d %H:%M:%S')
+        df['delivery_time'] = pd.to_datetime(df['delivery_time'], format='%m-%d %H:%M:%S')
+        df['delivery_gps_time'] = pd.to_datetime(df['delivery_gps_time'], format='%m-%d %H:%M:%S')
+        df['delivery_duration'] = (df['delivery_time'] - df['accept_time']).dt.total_seconds() / 3600  # Convert to hours
         return df
-
-    # Dialog to apply filters on courier ID, month, and day
-    @st.experimental_dialog("Filter")
-    def showFilters(df: pd.DataFrame):
-        courier_ids = [None] + sorted(df['courier_id'].unique()[1:])
-        courier_id = st.selectbox('Courier ID?', courier_ids, index=courier_ids.index(st.session_state.courier_id))
-        if courier_id is not None:
-            months = [None] + [month.rjust(2, '0') for month in map(str, range(1, 13))]
-            month = st.selectbox('Month?', months, index=months.index(st.session_state.month))
-        else:
-            month = None
-        if month:
-            days = [None] + [day.rjust(2, '0') for day in map(str, range(1, 32))]
-            day = st.selectbox('Day?', days, index=days.index(st.session_state.day))
-        else:
-            day = None
-
-        if st.button('Apply'):
-            st.session_state.courier_id = courier_id
-            st.session_state.month = month
-            st.session_state.day = day
-            st.session_state.camera = False
-            st.rerun()
-
-    # Dialog for camera input
-    @st.experimental_dialog('Camera')
-    def cameraInput():
-        img_buffer = st.camera_input('Take a picture')
-        data = util.parseBarcode(img_buffer)
-        if data:
-            st.session_state.courier_id, st.session_state.day, st.session_state.month = data
-            st.rerun()
-        else:
-            st.toast('Data invalid')
 
     # Dialog to show route on map
     @st.experimental_dialog('Route')
@@ -62,27 +32,55 @@ def run():
             st.session_state[key] = value
 
     initialState('camera', False)
-    initialState('courier_id')
-    initialState('month')
-    initialState('day')
-
-    courier_id = st.session_state.courier_id
-    month = st.session_state.month
-    day = st.session_state.day
-
-    st.title(f'Courier dashboard')
 
     df = delivery_df().copy()
 
-    col1, col2 = st.columns(2)
+    st.title(f'Courier dashboard')
 
-    with col1:
-        if st.button('Show Filters'):
-            showFilters(df)
+    # Streamlit App
+    st.title("Courier Idle Time Analysis")
 
-    with col2:
-        if st.button('Get Courier from Barcode'):
-            cameraInput()
+    st.write("This application visualizes the idle times of couriers between deliveries.")
+
+    # Group by region and calculate average delivery duration
+    region_performance = df.groupby('region_id')['delivery_duration'].mean().reset_index().round(2)
+    st.metric(label="No. Overloaded Regions", value=region_performance[region_performance['delivery_duration'] >= 5].index.size, delta=-0.5, delta_color="inverse", help='WHYHUYHWYWH')
+
+    # Streamlit app
+    st.title('Region-Based Delivery Performance')
+
+    # Rename columns for clarity
+    region_performance.columns = ['Region ID', 'Average Delivery Duration (Hours)']
+    # Create the Altair chart
+    chart = alt.Chart(region_performance).mark_bar().encode(
+        x=alt.X('Region ID:O', title='Region ID'),
+        y=alt.Y('Average Delivery Duration (Hours):Q', title='Average Delivery Duration (Hours)'),
+        color=alt.Color('Average Delivery Duration (Hours):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Average Delivery Duration (Hours)")),
+        tooltip=['Region ID', 'Average Delivery Duration (Hours)']
+    ).properties(
+        title='Average Delivery Duration by Region',
+    )
+
+    # Display the chart
+    st.altair_chart(chart, use_container_width=True)
+
+    with st.sidebar:
+        st.title('Filters')
+
+        courier_ids = [None] + sorted(df['courier_id'].unique()[1:])
+        courier_id = st.selectbox('Courier ID?', courier_ids)
+
+        if courier_id is not None:
+            months = [None] + [month.rjust(2, '0') for month in map(str, range(1, 13))]
+            month = st.selectbox('Month?', months)
+        else:
+            month = None
+
+        if month is not None:
+            days = [None] + [day.rjust(2, '0') for day in map(str, range(1, 32))]
+            day = st.selectbox('Day?', days)
+        else:
+            day = None
 
     # Apply filters to data
     mask = [
@@ -116,7 +114,7 @@ def run():
                 y=alt.Y('Count:Q', title='No. Deliveries'),
                 color=alt.Color('Count:Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="No. Deliveries")),
                 tooltip=[alt.Tooltip('Region:N', title='Area'), alt.Tooltip('Count:Q', title='No. Deliveries')]
-            )
+            ).interactive()
 
             st.altair_chart(deliveries_line, use_container_width=True)
 
