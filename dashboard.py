@@ -9,6 +9,8 @@ class DashboardType(StrEnum):
     movie = 'Movie'
 
 
+st.set_page_config(layout="wide")
+
 with st.sidebar:
     st.title('Navigation')
     dashboardType = st.radio(

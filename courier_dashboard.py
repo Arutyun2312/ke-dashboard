@@ -61,7 +61,6 @@ def run():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    st.set_page_config(layout="wide")
     initialState('camera', False)
     initialState('courier_id')
     initialState('month')

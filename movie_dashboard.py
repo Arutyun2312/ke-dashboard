@@ -23,7 +23,6 @@ def run():
 
     return movies_df, ratings_df, users_df
 
-  st.set_page_config(layout="wide")
   movies_df, ratings_df, users_df = read_df()
 
   st.title('Movie Ratings Dashboard')
