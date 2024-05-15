@@ -71,9 +71,9 @@ def drawRoute(coords):
     
 
 def parseBarcode(img_file_buffer):
-    from pyzbar.pyzbar import decode
     if img_file_buffer is None: 
         return None
+    from pyzbar.pyzbar import decode
     codes = decode(Image.open(img_file_buffer))
     if len(codes) != 1: 
         return None
