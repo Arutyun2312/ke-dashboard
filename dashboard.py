@@ -1,5 +1,7 @@
 from enum import StrEnum
 import streamlit as st
+import courier_dashboard 
+import movie_dashboard 
 
 
 class DashboardType(StrEnum):
@@ -9,9 +11,14 @@ class DashboardType(StrEnum):
 
 with st.sidebar:
     st.title('Navigation')
-    add_radio = st.radio(
+    dashboardType = st.radio(
         "Choose a dashboard",
         (DashboardType.courier, DashboardType.movie)
     )
 
+if dashboardType == DashboardType.courier:
+    courier_dashboard.run()
+
+if dashboardType == DashboardType.movie:
+    movie_dashboard.run()
 
