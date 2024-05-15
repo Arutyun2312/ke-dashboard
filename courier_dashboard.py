@@ -121,7 +121,7 @@ def run():
             st.altair_chart(deliveries_line, use_container_width=True)
 
         with col2:
-            st.title(f'No. Deliveries per {'day' if month else 'month'}')
+            st.title(f'No. Deliveries per {"day" if month else "month"}')
             st.write('This line chart shows deliveries over time')
             deliveries = df.groupby(df['delivery_gps_time'].dt.date).size().reset_index()
             deliveries.columns = ['Date', 'Cumulative Deliveries']
