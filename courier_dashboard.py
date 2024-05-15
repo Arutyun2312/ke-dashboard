@@ -9,8 +9,8 @@ def run():
     # Cache the data fetching and processing to optimize performance
     @st.cache_data
     def delivery_df():
-        # df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
-        df = 'data/delivery_sh.csv'
+        df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
+        # df = 'data/delivery_sh.csv'
 
         df = pd.read_csv(df)
         df['delivery_gps_time'] = df['delivery_gps_time'].apply(lambda d : '2023-' + d)
