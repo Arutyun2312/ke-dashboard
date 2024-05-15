@@ -71,7 +71,6 @@ def run():
     day = st.session_state.day
 
     st.title(f'Courier dashboard')
-    st.subheader(f'Courier id: {courier_id if courier_id is not None else '*'}; Month: {month if month is not None else '*'}; Day: {day if day is not None else '*'}')
 
     df = delivery_df().copy()
 
