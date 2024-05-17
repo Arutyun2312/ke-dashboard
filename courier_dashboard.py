@@ -11,15 +11,18 @@ def run():
     # Cache the data fetching and processing to optimize performance
     @st.cache_data
     def delivery_df():
-        df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
-        # df = 'data/delivery_sh.csv'
+        # df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
+        df = 'data/delivery_sh.csv'
+        distance_df = 'data/delivery_courier_distances.csv'
 
         df = pd.read_csv(df)
         df['accept_time'] = pd.to_datetime(df['accept_time'], format='%m-%d %H:%M:%S')
         df['delivery_time'] = pd.to_datetime(df['delivery_time'], format='%m-%d %H:%M:%S')
         df['delivery_gps_time'] = pd.to_datetime(df['delivery_gps_time'], format='%m-%d %H:%M:%S')
         df['delivery_duration'] = (df['delivery_time'] - df['accept_time']).dt.total_seconds() / 3600  # Convert to hours
-        return df
+
+        distance_df = pd.read_csv(distance_df)
+        return df, distance_df
 
     # Dialog to show route on map
     @st.experimental_dialog('Route')
@@ -33,7 +36,16 @@ def run():
 
     initialState('camera', False)
 
-    df = delivery_df().copy()
+    df, distance_df = delivery_df()
+    df, distance_df = df.copy(), distance_df.copy()
+
+    def getDistance(courier_id, day=None, month=None):
+        mask = distance_df['courier_id'] == int(courier_id)
+        if day is not None:
+            mask = mask & (distance_df['day'] == int(day))
+        if month is not None:
+            mask = mask & (distance_df['month'] == int(month))
+        return distance_df[mask][['distance', 'optimized_distance']]
 
     st.title(f'Courier dashboard')
 
@@ -67,7 +79,7 @@ def run():
     with st.sidebar:
         st.title('Filters')
 
-        courier_ids = [None] + sorted(df['courier_id'].unique()[1:])
+        courier_ids = [None] + sorted(df['courier_id'].unique())
         courier_id = st.selectbox('Courier ID?', courier_ids)
 
         if courier_id is not None:
@@ -152,14 +164,8 @@ def run():
 
     if courier_id is not None and month is None and day is None:
         def getDF():
-            sum = []
-            for day, month in util.day_month_iterator():
-                if day == 1:
-                    sum += [0]
-                mask = (df['delivery_gps_time'].dt.month == month) & (df['delivery_gps_time'].dt.day == day)
-                route = df[mask][['delivery_gps_lat', 'delivery_gps_lng']]
-                sum[-1] += util.calculate_total_distance(route)
-            return sum
+            df = distance_df
+            return df[df['courier_id'] == courier_id].groupby('month')['distance'].sum().values
         index = [month.rjust(2, '0') for month in map(str, util.month_iterator())]
         month_df = pd.DataFrame(getDF(), index=index)
         st.title('Distance per Month')
@@ -178,6 +184,33 @@ def run():
         # Display the chart using Streamlit
         st.altair_chart(chart, use_container_width=True)
 
+        # Create heat map using Altair
+        def create_heatmap(data, value_column, title, hide=True):
+            heatmap = alt.Chart(data).mark_rect().encode(
+                x=alt.X('day:O', title='Day'),
+                y=alt.Y('month:O', title='Month'),
+                color=None if hide else alt.Color(f'{value_column}:Q', title=title, scale=alt.Scale(scheme='yelloworangered', domain=[0, 20])),
+                tooltip=[alt.Tooltip('month:O', title='Month'), alt.Tooltip('day:O', title='Day'), alt.Tooltip(f'{value_column}:Q', title=title)]
+            ).properties(
+                title=title
+            )
+            return heatmap
+
+        # Streamlit app
+        st.title('Courier Distance Heatmaps')
+
+        # Create distance heatmap
+        distance_heatmap = create_heatmap(distance_df[distance_df['courier_id'] == courier_id], 'distance', 'Distance Traveled', False)
+
+        # Create optimized distance heatmap
+        optimized_distance_heatmap = create_heatmap(distance_df[distance_df['courier_id'] == courier_id], 'optimized_distance', 'Optimized Distance Traveled', True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.altair_chart(distance_heatmap, use_container_width=True)
+        with col2:
+            st.altair_chart(optimized_distance_heatmap, use_container_width=True)
+
 
     if courier_id is not None and month is not None and day is None:
         def route_distance(day: int):
@@ -195,11 +228,11 @@ def run():
         route = list(map(tuple, df[['delivery_gps_lat', 'delivery_gps_lng']].values))
         st.title(f'Route Inspection')
         if len(route):
-            distance = util.calculate_total_distance(route)
+            getDistance = util.calculate_total_distance(route)
             optimized = util.nearest_neighbor(route)
             optimized_distance = util.calculate_total_distance(optimized)
             data = pd.DataFrame(
-                [courier_id, distance, optimized_distance, distance - optimized_distance, list(df.groupby('region_id').size().index)], 
+                [courier_id, getDistance, optimized_distance, getDistance - optimized_distance, list(df.groupby('region_id').size().index)], 
                 index=['Courier Id', 'Distance Traveled (km)', 'Optimized Routes Distance (km)', 'Wasted Distance (km)', 'Areas']
             )
             st.dataframe(data.T.round(2), hide_index=True)

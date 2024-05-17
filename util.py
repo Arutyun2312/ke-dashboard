@@ -1,7 +1,8 @@
-from io import StringIO
+from io import BytesIO, StringIO
 import numpy as np
 import folium as f
 from PIL import Image
+import pandas as pd
 import requests
 
 
@@ -27,14 +28,17 @@ def calculate_total_distance(points):
     return np.round(distances.sum(), 2)
 
 def nearest_neighbor(points):
+    if len(points) == 0: 
+        return []
     start = points[0]
     path = [start]
-    visited = set()
-    visited.add(start)
+    visited = set(path)
     current = start
 
     while len(visited) < len(points):
-        next_point = min((p for p in points if p not in visited), key=lambda p: haversine(current[0], current[1], p[0], p[1]))
+        g = [p for p in points if p not in visited]
+        if len(g) == 0: break
+        next_point = min(g, key=lambda p: haversine(current[0], current[1], p[0], p[1]))
         path.append(next_point)
         visited.add(next_point)
         current = next_point
@@ -64,10 +68,9 @@ def drawRoute(coords):
     for x, y in coords:
         f.Circle((x, y), 10).add_to(m)
 
-    fileName = 'temp/map.html'
-    m.save(fileName)
-    with open(fileName) as file:
-        return file.read()
+    io = BytesIO()
+    m.save(io, False)
+    return str(io.getvalue(), 'utf8')
     
 
 def parseBarcode(img_file_buffer):
@@ -87,3 +90,7 @@ def parseBarcode(img_file_buffer):
 
 def get_csv(url: str):
     return StringIO(requests.get(url).text)
+
+
+def to_datetime(series: pd.Series):
+    return pd.to_datetime(series, format='%m-%d %H:%M:%S')
