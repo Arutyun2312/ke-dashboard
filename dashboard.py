@@ -1,7 +1,7 @@
 from enum import StrEnum
 import streamlit as st
-import courier_dashboard 
-import movie_dashboard 
+import courier.dashboard
+import movie.dashboard 
 
 
 class DashboardType(StrEnum):
@@ -19,8 +19,8 @@ with st.sidebar:
     )
 
 if dashboardType == DashboardType.courier:
-    courier_dashboard.run()
+    courier.dashboard.run()
 
 if dashboardType == DashboardType.movie:
-    movie_dashboard.run()
+    movie.dashboard.run()
 
