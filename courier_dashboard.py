@@ -14,6 +14,7 @@ def run():
         # df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
         df = 'data/delivery_sh.csv'
         distance_df = 'data/delivery_courier_distances.csv'
+        region_metric_df = 'data/delivery_region_metrics.csv'
 
         df = pd.read_csv(df)
         df['accept_time'] = pd.to_datetime(df['accept_time'], format='%m-%d %H:%M:%S')
@@ -22,7 +23,8 @@ def run():
         df['delivery_duration'] = (df['delivery_time'] - df['accept_time']).dt.total_seconds() / 3600  # Convert to hours
 
         distance_df = pd.read_csv(distance_df)
-        return df, distance_df
+        region_metric_df = pd.read_csv(region_metric_df)
+        return df, distance_df, region_metric_df
 
     # Dialog to show route on map
     @st.experimental_dialog('Route')
@@ -36,8 +38,8 @@ def run():
 
     initialState('camera', False)
 
-    df, distance_df = delivery_df()
-    df, distance_df = df.copy(), distance_df.copy()
+    dfs = delivery_df()
+    df, distance_df, region_metric_df = [x.copy() for x in dfs]
 
     def getDistance(courier_id, day=None, month=None):
         mask = distance_df['courier_id'] == int(courier_id)
@@ -58,29 +60,14 @@ def run():
     region_performance = df.groupby('region_id')['delivery_duration'].mean().reset_index().round(2)
     st.metric(label="No. Overloaded Regions", value=region_performance[region_performance['delivery_duration'] >= 5].index.size, delta=-0.5, delta_color="inverse", help='WHYHUYHWYWH')
 
-    # Streamlit app
-    st.title('Region-Based Delivery Performance')
-
-    # Rename columns for clarity
-    region_performance.columns = ['Region ID', 'Average Delivery Duration (Hours)']
-    # Create the Altair chart
-    chart = alt.Chart(region_performance).mark_bar().encode(
-        x=alt.X('Region ID:O', title='Region ID'),
-        y=alt.Y('Average Delivery Duration (Hours):Q', title='Average Delivery Duration (Hours)'),
-        color=alt.Color('Average Delivery Duration (Hours):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Average Delivery Duration (Hours)")),
-        tooltip=['Region ID', 'Average Delivery Duration (Hours)']
-    ).properties(
-        title='Average Delivery Duration by Region',
-    )
-
-    # Display the chart
-    st.altair_chart(chart, use_container_width=True)
-
     with st.sidebar:
         st.title('Filters')
 
         courier_ids = [None] + sorted(df['courier_id'].unique())
         courier_id = st.selectbox('Courier ID?', courier_ids)
+
+        region_ids = [None] + sorted(df['region_id'].unique())
+        region_id = st.selectbox('Region ID?', region_ids)
 
         if courier_id is not None:
             months = [None] + [month.rjust(2, '0') for month in map(str, range(1, 13))]
@@ -93,6 +80,25 @@ def run():
             day = st.selectbox('Day?', days)
         else:
             day = None
+
+    if courier_id is None:
+        # Streamlit app
+        st.title('Region-Based Delivery Performance')
+
+        # Rename columns for clarity
+        region_performance.columns = ['Region ID', 'Average Delivery Duration (Hours)']
+        # Create the Altair chart
+        chart = alt.Chart(region_performance).mark_bar().encode(
+            x=alt.X('Region ID:O', title='Region ID'),
+            y=alt.Y('Average Delivery Duration (Hours):Q', title='Average Delivery Duration (Hours)'),
+            color=alt.Color('Average Delivery Duration (Hours):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Average Delivery Duration (Hours)")),
+            tooltip=['Region ID', 'Average Delivery Duration (Hours)']
+        ).properties(
+            title='Average Delivery Duration by Region',
+        )
+
+        # Display the chart
+        st.altair_chart(chart, use_container_width=True)
 
     # Apply filters to data
     mask = [
@@ -236,8 +242,5 @@ def run():
                 index=['Courier Id', 'Distance Traveled (km)', 'Optimized Routes Distance (km)', 'Wasted Distance (km)', 'Areas']
             )
             st.dataframe(data.T.round(2), hide_index=True)
-
-            html = util.drawRoute(route)
-            components.html(html, height=600)
         else:
             st.subheader('Courier did not drive this day')

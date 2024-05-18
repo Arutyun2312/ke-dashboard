@@ -1,6 +1,5 @@
-from io import BytesIO, StringIO
+from io import StringIO
 import numpy as np
-import folium as f
 from PIL import Image
 import pandas as pd
 import requests
@@ -58,20 +57,6 @@ def month_iterator():
 def day_iterator():
     for day in range(1, 32):
         yield day
-
-
-def drawRoute(coords):
-    coords = np.array(coords)
-    m = f.Map(location=coords.mean(axis=0), zoom_start=13)
-
-    f.PolyLine(coords, color="blue", weight=2.5, opacity=1).add_to(m)
-    for x, y in coords:
-        f.Circle((x, y), 10).add_to(m)
-
-    io = BytesIO()
-    m.save(io, False)
-    return str(io.getvalue(), 'utf8')
-    
 
 def parseBarcode(img_file_buffer):
     if img_file_buffer is None: 
