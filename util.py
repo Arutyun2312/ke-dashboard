@@ -1,3 +1,4 @@
+from functools import reduce
 from io import StringIO
 import numpy as np
 from PIL import Image
@@ -79,3 +80,7 @@ def get_csv(url: str):
 
 def to_datetime(series: pd.Series):
     return pd.to_datetime(series, format='%m-%d %H:%M:%S')
+
+def multimask(df: pd.DataFrame, *mask):
+    mask = [x for x in mask if x is not None]
+    return reduce(lambda df, mask: df[mask], mask, df)
