@@ -6,7 +6,6 @@ from courier.model import delivery_df
 import util
 import streamlit.components.v1 as components
 import altair as alt
-from bs4 import BeautifulSoup
 import courier.model as model
 
 def run():
