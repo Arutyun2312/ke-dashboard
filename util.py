@@ -84,3 +84,6 @@ def to_datetime(series: pd.Series):
 def multimask(df: pd.DataFrame, *mask):
     mask = [x for x in mask if x is not None]
     return reduce(lambda df, mask: df[mask], mask, df)
+
+def flat_map(f, xs): 
+    return [y for ys in xs for y in f(ys)]
