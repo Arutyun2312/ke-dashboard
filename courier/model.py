@@ -5,7 +5,9 @@ import util
 
 @st.cache_data
 def delivery_df():
-    # df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
+    df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
+    distance_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_courier_distances.csv?alt=media&token=9b414540-5afa-4794-948a-449866e1196c')
+    region_metric_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_region_metrics.csv?alt=media&token=734a4dc3-3ceb-482c-b4b7-2e3ff7fe7e02')
     df = 'data/delivery_sh.csv'
     distance_df = 'data/delivery_courier_distances.csv'
     region_metric_df = 'data/delivery_region_metrics.csv'
