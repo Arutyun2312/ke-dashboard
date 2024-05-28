@@ -1,3 +1,4 @@
+from enum import StrEnum, auto
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -33,6 +34,25 @@ def get_region_performance(courier_id: str|None, region_id: str|None, month: str
         df = df[df['region_id'] == int(region_id)]
     return df.groupby('region_id')['delivery_duration'].mean().reset_index().round(2)
 
+class Section(StrEnum):
+    intro = auto()
+    region_performance = auto()
+    courier_performance = auto()
+    courier_route = auto()
+    courier_table = auto()
+
+    @property
+    def label(self):
+        if self == Section.intro:
+            return 'Introduction'
+        if self == Section.region_performance:
+            return 'Region Performance'
+        if self == Section.courier_performance:
+            return 'Courier Performance'
+        if self == Section.courier_route:
+            return 'Courier Route Inspection'
+        if self == Section.courier_table:
+            return 'Courier Table'
 
 def overloaded_region_metric(courier_id: str|None, region_id: str|None, month: str|None, day: str|None):
     if day is not None:
@@ -42,14 +62,12 @@ def overloaded_region_metric(courier_id: str|None, region_id: str|None, month: s
     st.metric(
         label="No. Overloaded Regions",
         value=value,
-        delta=value if value > 0 else None,
-        delta_color="inverse",
         help='A courier spends more than 5 hours between each delivery'
     )
 
 def number_of_active_couriers(courier_id: str|None, region_id: str|None, month: str|None, day: str|None):
     if courier_id is not None:
-        return
+        return [None] * 3
     df, _, _ = delivery_df()
     if month is not None:
         df = df[df['delivery_gps_time'].dt.month == int(month)]
@@ -60,11 +78,23 @@ def number_of_active_couriers(courier_id: str|None, region_id: str|None, month: 
     inactive = set(df['courier_id'].unique())
     inactive = inactive.difference(df['courier_id'].unique())
     active = df['courier_id'].unique().size
-    ratio = 1 if active == 0 and len(inactive) == 0 else active / (len(inactive) + active) * 100 
-    st.metric(
-        label="Active/Inactive Couriers = Active Ratio",
-        value=f'{active}/{len(inactive)} = {ratio:.1f}%',
-        help='Active = delivered at least once. Inactive = never delivered. % shows ratio of active couriers'
+    ratio = 0 if active == 0 and len(inactive) == 0 else active / (len(inactive) + active) * 100 
+    return (
+        lambda : st.metric(
+            label="Active Couriers",
+            value=f'{active}',
+            help='Number of couriers that have delivered at least once'
+        ),
+        lambda : st.metric(
+            label="Inactive Couriers",
+            value=f'{len(inactive)}',
+            help='Number of couriers that have never delivered'
+        ),
+        lambda : st.metric(
+            label="Active Courier Percent",
+            value=f'{ratio:.1f}',
+            help='Percent of active couriers from total number of couriers'
+        )
     )
 
 def number_of_inactive_couriers(month: str|None):
@@ -80,17 +110,23 @@ def number_of_inactive_couriers(month: str|None):
     )
 
 def delivery_duration_chart(courier_id: str|None, region_id: str|None, month: str|None):
+    if courier_id is not None:
+        return
     region_performance = get_region_performance(courier_id, region_id, month)
-    region_performance.columns = ['Region ID', 'Average Delivery Duration (Hours)']
+    region_performance.columns = ['Region ID', 'Duration (Hours)']
     chart = alt.Chart(region_performance).mark_bar().encode(
         x=alt.X('Region ID:O', title='Region ID'),
-        y=alt.Y('Average Delivery Duration (Hours):Q', title='Average Delivery Duration (Hours)'),
-        color=alt.Color('Average Delivery Duration (Hours):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Average Delivery Duration (Hours)")),
-        tooltip=['Region ID', 'Average Delivery Duration (Hours)']
+        y=alt.Y('Duration (Hours):Q', title='Duration (Hours)'),
+        color=alt.Color('Duration (Hours):Q', scale=alt.Scale(scheme='reds'), legend=None),
+        tooltip=['Region ID', 'Duration (Hours)']
     ).properties(
         title='Average Delivery Duration by Region',
     )
-    st.altair_chart(chart, use_container_width=True)
+
+    if region_performance.size:
+        st.altair_chart(chart, use_container_width=True)
+
+    return region_performance.size
 
 def deliveries_per_region(courier_id: str|None, region_id: str|None, month: str|None):
     df, _, _ = delivery_df()
@@ -111,11 +147,16 @@ def deliveries_per_region(courier_id: str|None, region_id: str|None, month: str|
 
     deliveries_line = base.mark_bar().encode(
         y=alt.Y('Count:Q', title='No. Deliveries'),
-        color=alt.Color('Count:Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="No. Deliveries")),
+        color=alt.Color('Count:Q', scale=alt.Scale(scheme='reds'), legend=None),
         tooltip=[alt.Tooltip('Region:N', title='Area'), alt.Tooltip('Count:Q', title='No. Deliveries')]
-    ).interactive()
+    ).properties(
+        title='No. Deliveries per Region',
+    )
 
-    st.altair_chart(deliveries_line, use_container_width=True)
+    if deliveries.size:
+        st.altair_chart(deliveries_line, use_container_width=True)
+
+    return deliveries.size
 
 def deliveries_per_day(courier_id: str|None, region_id: str|None, month: str|None):
     df, _, _ = delivery_df()
@@ -126,8 +167,10 @@ def deliveries_per_day(courier_id: str|None, region_id: str|None, month: str|Non
     if region_id is not None:
         df = df[df['region_id'] == int(region_id)]
 
-    st.title(f'No. Deliveries')
-    st.write('This line chart shows deliveries over time')
+    st.write("""
+    ## No. Deliveries
+    This line chart shows deliveries over time
+    """)
     deliveries = df.groupby(df['delivery_gps_time'].dt.date).size().reset_index()
     deliveries.columns = ['Date', 'Deliveries']
     
@@ -181,18 +224,18 @@ def courier_list(courier_id: str|None, region_id: str|None, month: str|None):
     df, _, _ = delivery_df()
     if month is not None:
         df = df[df['delivery_gps_time'].dt.month == int(month)]
-    if courier_id is not None:
-        return
     if region_id is not None:
         df = df[df['region_id'] == int(region_id)]
 
     df = df.reset_index()
-
-    st.title('Courier Metrics')
-    st.write('This table shows metrics per courier')
     courier_metrics = df.groupby('courier_id').agg(
         Total_Deliveries=pd.NamedAgg(column='order_id', aggfunc='count'),
         Unique_Regions=pd.NamedAgg(column='region_id', aggfunc='nunique')
     )
     courier_metrics.columns = ['Total Deliveries', 'Occupied Regions']
+
+    st.write(f"""
+    ## {Section.courier_table.label}
+    This table shows metrics per courier
+    """)
     st.dataframe(courier_metrics, use_container_width=True)

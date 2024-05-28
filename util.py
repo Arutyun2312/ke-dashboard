@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 import pandas as pd
 import requests
+import streamlit as st
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -87,3 +88,15 @@ def multimask(df: pd.DataFrame, *mask):
 
 def flat_map(f, xs): 
     return [y for ys in xs for y in f(ys)]
+
+def horizontal(*funcs):
+    for col, func in zip(st.columns(len(funcs)), funcs):
+        with col:
+            if func:
+                func()
+
+def write_empty(message: str):
+    st.write(f"""
+    ### Wow, such empty! 🙂
+    {message}
+    """)
