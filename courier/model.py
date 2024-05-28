@@ -232,10 +232,15 @@ def courier_list(courier_id: str|None, region_id: str|None, month: str|None):
         Total_Deliveries=pd.NamedAgg(column='order_id', aggfunc='count'),
         Unique_Regions=pd.NamedAgg(column='region_id', aggfunc='nunique')
     )
+    courier_metrics.index.name = 'Courier ID'
     courier_metrics.columns = ['Total Deliveries', 'Occupied Regions']
 
     st.write(f"""
     ## {Section.courier_table.label}
-    This table shows metrics per courier
+    This table shows metrics per courier.
+    
+    Total Deliveries = total number of deliveries
+    
+    Occupied Regions = total number of regions that courier has visited at least once
     """)
     st.dataframe(courier_metrics, use_container_width=True)
