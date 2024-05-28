@@ -1,5 +1,6 @@
 import calendar
 from functools import reduce
+import folium
 import pandas as pd
 import requests
 import streamlit as st
@@ -9,6 +10,7 @@ import streamlit.components.v1 as components
 import altair as alt
 import courier.model as model
 from .model import Section
+from streamlit_folium import st_folium
 
 def run():
     st.html("""
@@ -125,11 +127,14 @@ def run():
                 lambda: model.overloaded_region_metric(courier_id, region_id, month, day) if day is None else None,
                 *model.number_of_active_couriers(courier_id, region_id, month, day)
             )
-            s1 = model.delivery_duration_chart(courier_id, region_id, month)
-            s2 = model.deliveries_per_region(courier_id, region_id, month)
+            col1, col2 = st.columns(2)
+            with col1:
+                s1 = model.delivery_duration_chart(courier_id, region_id, month)
+            with col2:
+                s2 = model.deliveries_per_region(courier_id, region_id, month)
             if s1 == 0 or s2 == 0:
                 util.write_empty('There are no deliveries with your selected filters. Try adjusting them')
-            #model.deliveries_per_day(courier_id, region_id, month)
+            model.deliveries_per_day(courier_id, region_id, month)
         else:
             util.write_empty('Cannot show this section with the given filters. Please remove day or month filters')
 
@@ -172,6 +177,25 @@ def run():
                     index=['Courier Id', 'Distance Traveled (km)', 'Optimized Routes Distance (km)', 'Wasted Distance (km)', 'Areas']
                 )
                 st.dataframe(data.T.round(2), hide_index=True)
+
+                # Title for the Streamlit app
+                st.title('Delivery Route Visualization')
+
+                df_route = df[(df['courier_id'] == int(courier_id)) & (df['delivery_gps_time'].dt.month == int(month)) & (df['delivery_gps_time'].dt.day == int(day))]
+
+                # Create a Folium map
+                m = folium.Map(location=[df_route['delivery_gps_lat'].mean(), df_route['delivery_gps_lng'].mean()], zoom_start=14)
+
+                # Add the delivery points and route
+                folium.PolyLine(df_route[['delivery_gps_lat', 'delivery_gps_lng']].values, color='blue').add_to(m)
+                for i, row in df_route.iterrows():
+                    folium.Marker(
+                        location=[row['delivery_gps_lat'], row['delivery_gps_lng']],
+                        popup=row['delivery_gps_time']
+                    ).add_to(m)
+
+                # Display the map in Streamlit
+                st_folium(m, use_container_width=True)
             else:
                 st.subheader('No graph available. Courier did not drive this day 😢')
         else:
