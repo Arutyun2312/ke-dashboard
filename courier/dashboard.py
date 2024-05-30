@@ -1,5 +1,6 @@
 import calendar
 from functools import reduce
+import json
 import folium
 import pandas as pd
 import requests
@@ -119,7 +120,7 @@ def run():
 
         We hope you find this dashboard both informative and delightful as you steer your team towards greater efficiency and success!
         """)
-    
+
     if section == Section.region_performance:
         st.subheader(section.label)
         if month is None or day is None:
@@ -167,13 +168,13 @@ def run():
             util.write_empty('Cannot show this section with the given filters. Please select a courier')
 
     if section == Section.courier_route:
-        if month is not None and day is not None:
+        if courier_id is not None and month is not None and day is not None:
             route = list(map(tuple, df[['delivery_gps_lat', 'delivery_gps_lng']].values))
             st.subheader(f'Route Inspection')
             if len(route):
                 distance, optimized_distance = getDistance(courier_id, day, month).values[0]
                 data = pd.DataFrame(
-                    [courier_id, distance, optimized_distance, distance - optimized_distance, list(df.groupby('region_id').size().index)], 
+                    [courier_id, distance, optimized_distance, distance - optimized_distance, list(df.groupby('region_id').size().index)],
                     index=['Courier Id', 'Distance Traveled (km)', 'Optimized Routes Distance (km)', 'Wasted Distance (km)', 'Areas']
                 )
                 st.dataframe(data.T.round(2), hide_index=True)
@@ -182,16 +183,18 @@ def run():
                 st.title('Delivery Route Visualization')
 
                 df_route = df[(df['courier_id'] == int(courier_id)) & (df['delivery_gps_time'].dt.month == int(month)) & (df['delivery_gps_time'].dt.day == int(day))]
+                df_route = df_route[['delivery_gps_lat', 'delivery_gps_lng', 'delivery_gps_time']]
+                df_route.columns = ['lat', 'lng', 'time']
 
                 # Create a Folium map
-                m = folium.Map(location=[df_route['delivery_gps_lat'].mean(), df_route['delivery_gps_lng'].mean()], zoom_start=14)
+                m = folium.Map(location=[df_route['lat'].mean(), df_route['lng'].mean()], zoom_start=14)
 
                 # Add the delivery points and route
-                folium.PolyLine(df_route[['delivery_gps_lat', 'delivery_gps_lng']].values, color='blue').add_to(m)
+                folium.PolyLine(df_route[['lat', 'lng']].values, color='blue').add_to(m)
                 for i, row in df_route.iterrows():
                     folium.Marker(
-                        location=[row['delivery_gps_lat'], row['delivery_gps_lng']],
-                        popup=row['delivery_gps_time']
+                        location=[row['lat'], row['lng']],
+                        popup=row['time']
                     ).add_to(m)
 
                 # Display the map in Streamlit
@@ -206,3 +209,16 @@ def run():
             model.courier_list(courier_id, region_id, month)
         else:
             util.write_empty('Cannot show this section with the given filters. Please unselect the courier')
+
+    if util.isDev() and section == Section.experimental:
+        df, _, _ = model.delivery_df()
+
+        centroids = df.groupby('region_id').agg({
+            'lat': 'mean',
+            'lng': 'mean',
+            'order_id': 'count'
+        }).reset_index()
+
+        centroids.columns = ['id', 'lat', 'lng', 'count']
+
+        model.geochart(centroids, 'No. deliveries')

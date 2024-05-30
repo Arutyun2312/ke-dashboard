@@ -100,3 +100,6 @@ def write_empty(message: str):
     ### Wow, such empty! 🙂
     {message}
     """)
+
+def isDev():
+    return 'environment' in st.secrets and st.secrets.environment.env == 'dev'

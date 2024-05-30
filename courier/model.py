@@ -1,17 +1,23 @@
 from enum import StrEnum, auto
+import folium
 import streamlit as st
 import pandas as pd
 import altair as alt
 import util
+from streamlit_folium import st_folium
+import geopandas as gpd
+import json
 
 @st.cache_data
 def delivery_df():
-    df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
-    distance_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_courier_distances.csv?alt=media&token=9b414540-5afa-4794-948a-449866e1196c')
-    region_metric_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_region_metrics.csv?alt=media&token=734a4dc3-3ceb-482c-b4b7-2e3ff7fe7e02')
-    # df = 'data/delivery_sh.csv'
-    # distance_df = 'data/delivery_courier_distances.csv'
-    # region_metric_df = 'data/delivery_region_metrics.csv'
+    if util.isDev():
+        df = 'data/delivery_sh.csv'
+        distance_df = 'data/delivery_courier_distances.csv'
+        region_metric_df = 'data/delivery_region_metrics.csv'
+    else:
+        df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
+        distance_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_courier_distances.csv?alt=media&token=9b414540-5afa-4794-948a-449866e1196c')
+        region_metric_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_region_metrics.csv?alt=media&token=734a4dc3-3ceb-482c-b4b7-2e3ff7fe7e02')
 
     df = pd.read_csv(df)
     df['accept_time'] = pd.to_datetime(df['accept_time'], format='%m-%d %H:%M:%S')
@@ -22,6 +28,19 @@ def delivery_df():
     distance_df = pd.read_csv(distance_df)
     region_metric_df = pd.read_csv(region_metric_df)
     return df, distance_df, region_metric_df
+
+@st.cache_data
+def region_centers():
+    df, _, _ = delivery_df()
+
+    centroids = df.groupby('region_id').agg({
+        'lat': 'mean',
+        'lng': 'mean'
+    }).reset_index()
+    centroids.columns = ['region_id', 'lat', 'lng']
+
+    return centroids
+
 
 @st.cache_data
 def get_region_performance(courier_id: str|None, region_id: str|None, month: str|None):
@@ -40,6 +59,8 @@ class Section(StrEnum):
     courier_performance = auto()
     courier_route = auto()
     courier_table = auto()
+    if util.isDev():
+        experimental = auto()
 
     @property
     def label(self):
@@ -53,6 +74,8 @@ class Section(StrEnum):
             return 'Courier Route Inspection'
         if self == Section.courier_table:
             return 'Courier Table'
+        if util.isDev() and self == Section.experimental:
+            return 'Experimental'
 
 def overloaded_region_metric(courier_id: str|None, region_id: str|None, month: str|None, day: str|None):
     if day is not None:
@@ -78,7 +101,7 @@ def number_of_active_couriers(courier_id: str|None, region_id: str|None, month: 
     inactive = set(df['courier_id'].unique())
     inactive = inactive.difference(df['courier_id'].unique())
     active = df['courier_id'].unique().size
-    ratio = 0 if active == 0 and len(inactive) == 0 else active / (len(inactive) + active) * 100 
+    ratio = 0 if active == 0 and len(inactive) == 0 else active / (len(inactive) + active) * 100
     return (
         lambda : st.metric(
             label="Active Couriers",
@@ -173,7 +196,7 @@ def deliveries_per_day(courier_id: str|None, region_id: str|None, month: str|Non
     """)
     deliveries = df.groupby(df['delivery_gps_time'].dt.date).size().reset_index()
     deliveries.columns = ['Date', 'Deliveries']
-    
+
     # Create a base chart with common settings
     base = alt.Chart(deliveries).encode(
         x=alt.X('Date:T', title='Date'),
@@ -238,9 +261,41 @@ def courier_list(courier_id: str|None, region_id: str|None, month: str|None):
     st.write(f"""
     ## {Section.courier_table.label}
     This table shows metrics per courier.
-    
+
     Total Deliveries = total number of deliveries
-    
+
     Occupied Regions = total number of regions that courier has visited at least once
     """)
     st.dataframe(courier_metrics, use_container_width=True)
+
+@st.cache_data
+def shanghai_geojson_features():
+    shanghai_geojson_url = 'https://geo.datav.aliyun.com/areas/bound/310000_full.json'
+    shanghai_geojson = gpd.read_file(shanghai_geojson_url)
+    shanghai_geojson = json.loads(shanghai_geojson.to_json())
+    return alt.Data(values=shanghai_geojson['features'])
+
+def geochart(df: pd.DataFrame, legend_title: str):
+    # df.columns = ['id', 'lat', 'lng', 'count']
+
+    background = alt.Chart(shanghai_geojson_features()).mark_geoshape(
+        fill='#ECFFEB',
+        stroke='darkblue'
+    ).encode(
+        tooltip=[alt.Tooltip('properties.name:N', title='Name')]
+    ).project(
+        type='mercator'
+    ).properties(
+        width=800,
+        height=600
+    ).interactive()
+
+    points = alt.Chart(df).mark_circle().encode(
+        longitude='lng:Q',
+        latitude='lat:Q',
+        size=alt.Size('count:Q', scale=alt.Scale(range=[100, 1000])),
+        color=alt.Color('count:Q', scale=alt.Scale(scheme='viridis'), legend=alt.Legend(title=legend_title)),
+        tooltip=['id:N', 'lat:Q', 'lng:Q', 'count:Q']
+    )
+
+    st.altair_chart(background + points, use_container_width=True)
