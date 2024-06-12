@@ -204,7 +204,7 @@ def deliveries_per_day(courier_id: str|None, region_id: str|None, month: str|Non
         y=alt.Y('Deliveries:Q', title='No. Deliveries'),
         tooltip=[alt.Tooltip('Deliveries:Q', title='Deliveries')],
         color=alt.value('blue')  # Ensures the line color is blue
-    ).interactive()
+    )
 
     st.altair_chart(deliveries_line, use_container_width=True)
 
@@ -252,6 +252,8 @@ def courier_list(courier_id: str|None, region_id: str|None, month: str|None):
     courier_metrics.columns = ['Total Deliveries', 'Occupied Regions']
 
     st.write(f"""
+             
+    Not Part of the dashboard!
     This table shows metrics per courier.
 
     Total Deliveries = total number of deliveries
@@ -280,7 +282,7 @@ def geochart(df: pd.DataFrame, legend_title: str):
     ).properties(
         width=800,
         height=600
-    ).interactive()
+    )
 
     points = alt.Chart(df).mark_circle().encode(
         longitude='lng:Q',
