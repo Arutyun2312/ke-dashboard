@@ -38,35 +38,35 @@ def run():
         st.title('Select a Dashboard')
         section = st.radio('Section', tuple(Section), format_func=lambda s: s.label)
 
-        if section not in [Section.intro]:
+        if section not in [Section.intro, Section.movielens_4, Section.movielens_5]:
             st.title('Filters')
 
-        if section not in [Section.intro, Section.courier_table]:
+        if section not in [Section.intro, Section.region_performance, Section.movielens_4, Section.movielens_5]:
             courier_ids = [None] + sorted(df['courier_id'].unique())
             courier_id = st.selectbox('Courier ID?', courier_ids, format_func=lambda id: '-' if id is None else id)
         else:
             courier_id = None
 
-        if section not in [Section.intro, Section.courier_performance, Section.courier_table, Section.region_performance, Section.courier_route]:
+        if section not in [Section.intro, Section.courier_performance, Section.region_performance, Section.courier_route, Section.movielens_4, Section.movielens_5]:
             region_ids = [None] + sorted(df['region_id'].unique())
             region_id = st.selectbox('Region ID?', region_ids, format_func=lambda id: '-' if id is None else id)
         else:
             region_id = None
 
-        if section not in [Section.intro]:
+        if section not in [Section.intro, Section.courier_performance, Section.movielens_4, Section.movielens_5]:
             months = [None] + list(range(1, 13))
             month = st.selectbox('Month?', months, format_func=lambda m: '-' if m is None else list(calendar.month_name)[m])
         else:
             month = None
 
-        if month is not None and section not in [Section.intro, Section.courier_performance, Section.courier_table]:
+        if month is not None and section not in [Section.intro, Section.region_performance, Section.courier_performance, Section.movielens_4, Section.movielens_5]:
             days = [None] + list(range(1, 32))
             day = st.selectbox('Day?', days, format_func=lambda d: '-' if d is None else str(d).rjust(2, '0'))
         else:
             day = None
 
     if section != Section.intro:
-        st.title(f'Courier dashboard')
+        st.title(section.label)
 
     if section == Section.intro:
         st.write("""
@@ -122,7 +122,6 @@ def run():
         """)
 
     if section == Section.region_performance:
-        st.subheader(section.label)
         if month is None or day is None:
             util.horizontal(
                 lambda: model.overloaded_region_metric(courier_id, region_id, month, day) if day is None else None,
@@ -136,34 +135,28 @@ def run():
             if s1 == 0 or s2 == 0:
                 util.write_empty('There are no deliveries with your selected filters. Try adjusting them')
             model.deliveries_per_day(courier_id, region_id, month)
+
+            df, _, _ = delivery_df()
+            if month is not None:
+                df = df[df['delivery_gps_time'].dt.month == int(month)]
+
+            centroids = df.groupby('region_id').agg({
+                'lat': 'mean',
+                'lng': 'mean',
+                'order_id': 'count'
+            }).reset_index()
+
+            centroids.columns = ['id', 'lat', 'lng', 'count']
+
+            st.write("### Deliveries by Region")
+            st.write("This geochart shows the distribution of deliveries across different regions. Each point represents a region where the courier made deliveries, with the size of the point indicating the number of deliveries.")
+            model.geochart(centroids, 'No. deliveries')
         else:
             util.write_empty('Cannot show this section with the given filters. Please remove day or month filters')
 
     if section == Section.courier_performance:
         if courier_id is not None:
-            df = util.multimask(
-                df,
-                (df['courier_id'] == courier_id) if courier_id is not None else None,
-                (df['delivery_gps_time'].dt.month == int(month)) if month is not None else None,
-                (df['delivery_gps_time'].dt.day == int(day)) if day is not None else None,
-            )
-            df = df.sort_values(['delivery_gps_time'])
-
-            if month is None:
-                model.deliveries_over_time(courier_id, region_id, month)
-            else:
-                def route_distance(day: int):
-                    mask = (df['delivery_gps_time'].dt.day == day)
-                    route = df[mask][['delivery_gps_lat', 'delivery_gps_lng']]
-                    return util.calculate_total_distance(route)
-
-                index=[day.rjust(2, '0') for day in map(str, util.day_iterator())]
-                month_df = pd.DataFrame(list(map(route_distance, util.day_iterator())), index=index)
-                if max(month_df[month_df.columns[0]]):
-                    st.title('Distance (km) per Day')
-                    st.bar_chart(month_df)
-                else:
-                    util.write_empty('No data available')
+            model.dashboard2(courier_id)
         else:
             util.write_empty('Cannot show this section with the given filters. Please select a courier')
 
@@ -172,47 +165,104 @@ def run():
             route = list(map(tuple, df[['delivery_gps_lat', 'delivery_gps_lng']].values))
             st.subheader(f'Route Inspection')
             if len(route):
-                distance, optimized_distance = getDistance(courier_id, day, month).values[0]
-                data = pd.DataFrame(
-                    [courier_id, distance, optimized_distance, distance - optimized_distance, list(df.groupby('region_id').size().index)],
-                    index=['Courier Id', 'Distance Traveled (km)', 'Optimized Routes Distance (km)', 'Wasted Distance (km)', 'Areas']
-                )
-                st.dataframe(data.T.round(2), hide_index=True)
+                df_route = df[(df['courier_id'] == courier_id) & (df['delivery_gps_time'].dt.month == month) & (df['delivery_gps_time'].dt.day == day)]
+                 # Calculate total and optimized distances
+                distance, optimized_distance = distance_df[(distance_df['courier_id'] == courier_id) & (distance_df['month'] == month) & (distance_df['day'] == day)][['distance', 'optimized_distance']].values[0]
+                wasted_distance = distance - optimized_distance
+                areas = list(df_route['region_id'].unique())
 
-                # Title for the Streamlit app
-                st.title('Delivery Route Visualization')
+                # Display the metrics
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric(label="Distance Traveled (km)", value=round(distance, 2), help='Total distance traveled')
+                col2.metric(label="Optimized Routes Distance (km)", value=round(optimized_distance, 2), help='Distance traveled if courier traveled by efficient route')
+                col3.metric(label="Wasted Distance (km)", value=round(wasted_distance, 2), help='Extra distance traveled')
+                col4.metric(label="Regions", value='[' + ','.join(list(map(str, areas))) + ']', help='List of visited regions')
 
-                df_route = df[(df['courier_id'] == int(courier_id)) & (df['delivery_gps_time'].dt.month == int(month)) & (df['delivery_gps_time'].dt.day == int(day))]
+                # Prepare the route data for mapping
                 df_route = df_route[['delivery_gps_lat', 'delivery_gps_lng', 'delivery_gps_time']]
                 df_route.columns = ['lat', 'lng', 'time']
+                df_route = df_route.sort_values('time')
+
+                # Calculate cumulative distance
+                df_route['prev_lat'] = df_route['lat'].shift()
+                df_route['prev_lng'] = df_route['lng'].shift()
+                df_route = df_route.dropna()
+                df_route['distance'] = df_route.apply(lambda row: util.haversine(row['prev_lat'], row['prev_lng'], row['lat'], row['lng']), axis=1)
+                df_route['cumulative_distance'] = df_route['distance'].cumsum()
+            
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    # Line chart for distance covered over time
+                    st.write("### Distance Covered Over Time")
+                    st.write("This line chart shows the cumulative distance covered by the courier over time, aggregated per hour.")
+                    df_route['hour'] = df_route['time'].dt.hour
+                    distance_over_time = df_route.groupby('hour')['cumulative_distance'].max().reset_index()
+                    distance_chart = alt.Chart(distance_over_time).mark_line().encode(
+                        x=alt.X('hour:Q', title='Hour of Day'),
+                        y=alt.Y('cumulative_distance:Q', title='Cumulative Distance Covered (km)'),
+                        tooltip=['hour:Q', 'cumulative_distance:Q']
+                    ).properties(
+                        title="Distance Covered Over Time"
+                    )
+                    st.altair_chart(distance_chart, use_container_width=True)
+
+                with col2:
+                    # Line chart for total number of deliveries over time
+                    st.write("### Total Number of Deliveries Over Time")
+                    st.write("This line chart shows the total number of deliveries made by the courier over time, aggregated per hour.")
+                    deliveries_over_time = df_route.groupby('hour').size().cumsum().reset_index(name='count')
+                    deliveries_chart = alt.Chart(deliveries_over_time).mark_line().encode(
+                        x=alt.X('hour:Q', title='Hour of Day'),
+                        y=alt.Y('count:Q', title='Number of Deliveries'),
+                        tooltip=['hour:Q', 'count:Q']
+                    ).properties(
+                        title="Total Number of Deliveries Over Time"
+                    )
+                    st.altair_chart(deliveries_chart, use_container_width=True)
 
                 # Create a Folium map
                 m = folium.Map(location=[df_route['lat'].mean(), df_route['lng'].mean()], zoom_start=14)
 
                 # Add the delivery points and route
                 folium.PolyLine(df_route[['lat', 'lng']].values, color='blue').add_to(m)
-                for i, row in df_route.iterrows():
+                # Add first and last markers with different colors
+                first_point = df_route.iloc[0]
+                last_point = df_route.iloc[-1]
+                folium.Marker(
+                    location=[first_point['lat'], first_point['lng']],
+                    popup=f"Start: {first_point['time']}",
+                    icon=folium.Icon(color='green')
+                ).add_to(m)
+                folium.Marker(
+                    location=[last_point['lat'], last_point['lng']],
+                    popup=f"End: {last_point['time']}",
+                    icon=folium.Icon(color='red')
+                ).add_to(m)
+                
+                # Add remaining markers
+                for i, row in df_route.iloc[1:-1].iterrows():
                     folium.Marker(
                         location=[row['lat'], row['lng']],
                         popup=row['time']
                     ).add_to(m)
 
+                # Title for the Streamlit app
+                st.title('Delivery Route Visualization')
                 # Display the map in Streamlit
                 st_folium(m, use_container_width=True)
             else:
                 st.subheader('No graph available. Courier did not drive this day 😢')
         else:
-            util.write_empty('Cannot show this section with the given filters. Please select a courier, month and day')
-
-    if section == Section.courier_table:
-        if courier_id is None:
-            model.courier_list(courier_id, region_id, month)
-        else:
-            util.write_empty('Cannot show this section with the given filters. Please unselect the courier')
+            util.write_empty('Cannot show this section with the given filters. Please select a courier, month and day. Try 164, June, 04')
     
     if section == Section.movielens_4:
         import movie.model
         movie.model.dashboard4()
+
+    if section == Section.movielens_5:
+        import movie.model
+        movie.model.dashboard5()
 
     if util.isDev() and section == Section.experimental:
         df, _, _ = model.delivery_df()

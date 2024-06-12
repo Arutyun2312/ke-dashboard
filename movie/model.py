@@ -237,9 +237,6 @@ def dashboard4():
     genre_distribution = merged_df['Genres'].value_counts().reset_index()
     genre_distribution.columns = ['Genres', 'Count']
 
-    # Streamlit layout
-    st.title("MovieLens User Engagement Dashboard")
-
     # Metrics in one row
     col1, col2 = st.columns(2)
     col1.metric(label="Total Users", value=total_users, help="The total number of unique users in the dataset.")
@@ -289,4 +286,83 @@ def dashboard4():
     st.write("**Observations and Insights:**")
     st.write("- The 'Drama' genre is the most rated, followed by 'Comedy' and 'Action', indicating these genres are the most popular among users.")
     st.write("- 'Film-Noir' and 'Documentary' genres, while having high average ratings, represent a smaller portion of the total ratings, suggesting they are niche but appreciated.")
+
+def dashboard5():
+    import streamlit as st
+    import pandas as pd
+    import altair as alt
+
+    # Reading data using the pre-defined function
+    movies_df, ratings_df, users_df = read_df()
+
+    # Calculate number of movies
+    total_movies = movies_df['MovieID'].nunique()
+
+    # Find the oldest rated movie
+    oldest_rating_timestamp = ratings_df['Timestamp'].min()
+    oldest_rating_date = pd.to_datetime(oldest_rating_timestamp, unit='s')
+    oldest_rated_movie = ratings_df.loc[ratings_df['Timestamp'] == oldest_rating_timestamp, 'MovieID'].iloc[0]
+    oldest_movie_title = movies_df.loc[movies_df['MovieID'] == oldest_rated_movie, 'Title'].values[0]
+
+    # Find the most recently rated movie
+    latest_rating_timestamp = ratings_df['Timestamp'].max()
+    latest_rating_date = pd.to_datetime(latest_rating_timestamp, unit='s')
+    latest_rated_movie = ratings_df.loc[ratings_df['Timestamp'] == latest_rating_timestamp, 'MovieID'].iloc[0]
+    latest_movie_title = movies_df.loc[movies_df['MovieID'] == latest_rated_movie, 'Title'].values[0]
+
+    # Calculate genre distribution of rated movies
+    movies_exploded = movies_df.explode('Genres')
+    merged_df = ratings_df.merge(movies_exploded, on='MovieID')
+    genre_distribution = merged_df['Genres'].value_counts().reset_index()
+    genre_distribution.columns = ['Genres', 'Count']
+
+    # Heatmap data for average ratings by genre and year
+    ratings_df['Timestamp'] = pd.to_datetime(ratings_df['Timestamp'], unit='s')
+    ratings_genres = ratings_df.merge(movies_exploded, on='MovieID')
+    ratings_genres['Year'] = ratings_genres['Timestamp'].dt.year
+    average_ratings_by_genre_year = ratings_genres.groupby(['Genres', 'Year'])['Rating'].mean().reset_index()
+
+    # Metrics in one row
+    col1, col2, col3 = st.columns(3)
+    col1.metric(label="Total Movies", value=total_movies, help="The total number of unique movies in the dataset.")
+    col2.metric(label="Oldest Rated Movie", value=f"{oldest_movie_title}", help="The movie with the earliest rating in the dataset.")
+    col3.metric(label="Most Recently Rated Movie", value=f"{latest_movie_title}", help="The movie with the most recent rating in the dataset.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        # Genre distribution pie chart
+        st.write("### Genre Distribution of Rated Movies")
+        st.write("This pie chart shows the distribution of genres among the rated movies. It highlights the most popular genres based on the number of ratings.")
+        pie_chart = alt.Chart(genre_distribution).mark_arc().encode(
+            theta=alt.Theta(field='Count', type='quantitative'),
+            color=alt.Color(field='Genres', type='nominal'),
+            tooltip=['Genres', 'Count']
+        ).properties(
+            title="Genre Distribution of Rated Movies",
+            height=600
+        )
+        st.altair_chart(pie_chart, use_container_width=True)
+
+    with col2:
+        # Heatmap of average ratings by genre and year
+        st.write("### Average Ratings by Genre and Year")
+        st.write("This heatmap shows the average ratings for different genres over the years. It helps identify which genres have been consistently rated higher or lower.")
+        heatmap = alt.Chart(average_ratings_by_genre_year).mark_rect().encode(
+            x=alt.X('Year:O', title='Year'),
+            y=alt.Y('Genres', title='Genre'),
+            color=alt.Color('Rating', title='Average Rating', scale=alt.Scale(scheme='viridis')),
+            tooltip=['Year', 'Genres', 'Rating']
+        ).properties(
+            title="Average Ratings by Genre and Year",
+            height=600
+        )
+        st.altair_chart(heatmap, use_container_width=True)
+
+    st.write("**Observations and Insights For Genre Distribution:**")
+    st.write("- The 'Drama' genre is the most rated, followed by 'Comedy' and 'Action', indicating these genres are the most popular among users.")
+    st.write("- 'Film-Noir' and 'Documentary' genres, while having high average ratings, represent a smaller portion of the total ratings, suggesting they are niche but appreciated.")
+    st.write("**Observations and Insights for Average Ratings by Genre and Year:**")
+    st.write("- The heatmap reveals trends in genre popularity and how average ratings change over time.")
+    st.write("- Consistently high or low ratings for certain genres can indicate stable user preferences or the impact of industry trends.")
+    st.write("- Drama and Sci-Fi genres consistently receive high ratings over the years, while the Horror genre tends to have more fluctuating ratings.")
 

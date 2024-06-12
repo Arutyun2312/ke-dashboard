@@ -59,8 +59,8 @@ class Section(StrEnum):
     region_performance = auto()
     courier_performance = auto()
     courier_route = auto()
-    courier_table = auto()
     movielens_4 = auto()
+    movielens_5 = auto()
     if util.isDev():
         experimental = auto()
 
@@ -74,10 +74,10 @@ class Section(StrEnum):
             return 'Courier Performance'
         if self == Section.courier_route:
             return 'Courier Route Inspection'
-        if self == Section.courier_table:
-            return 'Courier Table'
         if self == Section.movielens_4:
-            return 'MovieLens4'
+            return 'MovieLens User Engagement'
+        if self == Section.movielens_5:
+            return 'MovieLens Movie Performance'
         if util.isDev() and self == Section.experimental:
             return 'Experimental'
 
@@ -231,7 +231,6 @@ def deliveries_over_time(courier_id: str|None, region_id: str|None, month: str|N
         return df.groupby('month')['distance'].sum().values
     index = [month.rjust(2, '0') for month in map(str, util.month_iterator())]
     month_df = pd.DataFrame(getDF(), index=index)
-    st.title('Distance per Month')
     month_df.reset_index(inplace=True)
     month_df.columns = ['Month', 'Distance']
     # Create the Altair chart object
@@ -263,7 +262,6 @@ def courier_list(courier_id: str|None, region_id: str|None, month: str|None):
     courier_metrics.columns = ['Total Deliveries', 'Occupied Regions']
 
     st.write(f"""
-    ## {Section.courier_table.label}
     This table shows metrics per courier.
 
     Total Deliveries = total number of deliveries
@@ -303,3 +301,76 @@ def geochart(df: pd.DataFrame, legend_title: str):
     )
 
     st.altair_chart(background + points, use_container_width=True)
+
+def dashboard2(courier_id: int):
+    import streamlit as st
+    import pandas as pd
+    import altair as alt
+
+    # Load data using the pre-defined function
+    df, distance_df, _ = delivery_df()
+
+    # Assume a specific courier ID for the dashboard
+
+    # Filter data for the selected courier
+    courier_data = df[df['courier_id'] == courier_id]
+    courier_distance_data = distance_df[distance_df['courier_id'] == courier_id]
+
+    # Calculate number of deliveries made
+    num_deliveries = courier_data.shape[0]
+
+    # Calculate number of regions visited
+    num_regions_visited = courier_data['region_id'].nunique()
+
+    # Calculate working vs non-working days
+    courier_data['date'] = courier_data['accept_time'].dt.date
+    working_days = courier_data['date'].nunique()
+    total_days = (courier_data['date'].max() - courier_data['date'].min()).days + 1
+    non_working_days = total_days - working_days
+
+    # Geochart data preparation
+    region_deliveries = courier_data.groupby('region_id').size().reset_index(name='count')
+    geochart_data = region_deliveries.merge(region_centers()[['region_id', 'lat', 'lng']], on='region_id')
+
+    # Streamlit layout
+    st.title(f"Courier Performance Dashboard for Courier ID: {courier_id}")
+
+    # Metrics in one row
+    col1, col2 = st.columns(2)
+    col1.metric(label="Number of Deliveries", value=num_deliveries, help="Total number of deliveries made by the courier.")
+    col2.metric(label="Number of Regions Visited", value=num_regions_visited, help="Total number of unique regions visited by the courier.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Geochart of deliveries in regions
+        st.write("### Deliveries by Region")
+        st.write("This geochart shows the distribution of deliveries across different regions. Each point represents a region where the courier made deliveries, with the size of the point indicating the number of deliveries.")
+        geochart(geochart_data, legend_title="Number of Deliveries")
+
+    with col2:
+        # Pie chart of working vs non-working days
+        st.write("### Working vs Non-Working Days")
+        st.write("This pie chart shows the distribution of working days versus non-working days for the courier.")
+        pie_chart_data = pd.DataFrame({
+            'Days': ['Working Days', 'Non-Working Days'],
+            'Count': [working_days, non_working_days]
+        })
+        pie_chart = alt.Chart(pie_chart_data).mark_arc().encode(
+            theta=alt.Theta(field='Count', type='quantitative'),
+            color=alt.Color(field='Days', type='nominal'),
+            tooltip=['Days', 'Count']
+        ).properties(
+            title="Working vs Non-Working Days"
+        )
+        st.altair_chart(pie_chart, use_container_width=True)
+
+    # Bar chart of distance traveled per month
+    st.write("### Distance Traveled per Month")
+    st.write("This bar chart shows the total distance traveled by the courier each month.")
+    deliveries_over_time(courier_id, None, None)
+
+    courier_list(None, None, None)
+
+
+
