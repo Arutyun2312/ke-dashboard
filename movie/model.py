@@ -242,6 +242,33 @@ def dashboard4():
     col1.metric(label="Total Users", value=total_users, help="The total number of unique users in the dataset.")
     col2.metric(label="Total Ratings", value=total_ratings, help="The total number of ratings provided by users.")
 
+    col1, col2 = st.columns(2)
+    with col1:
+        # Genre distribution pie chart
+        st.write("### Genre Distribution of Rated Movies")
+        st.write("This pie chart shows the distribution of genres among the rated movies. It highlights the most popular genres based on the number of ratings.")
+        pie_chart = alt.Chart(genre_distribution).mark_arc().encode(
+            theta=alt.Theta(field='Count', type='quantitative'),
+            color=alt.Color(field='Genres', type='nominal'),
+            tooltip=['Genres', 'Count']
+        ).properties(
+            title="Genre Distribution of Rated Movies"
+        )
+        st.altair_chart(pie_chart, use_container_width=True)
+
+    with col2:
+        # User activity over time line chart
+        st.write("### User Activity Over Time")
+        st.write(f"This line chart displays the number of ratings provided by users each month from {start_date} to {end_date}. It helps identify trends and peak periods of user activity.")
+        line_chart = alt.Chart(user_activity_over_time).mark_line().encode(
+            x=alt.X('Month', title='Month'),
+            y=alt.Y('count', title='Number of Ratings'),
+            tooltip=['Month', 'count']
+        ).properties(
+            title="User Activity Over Time"
+        )
+        st.altair_chart(line_chart, use_container_width=True)
+    
     # Average ratings per genre bar chart
     st.write("### Average Ratings per Genre")
     st.write("This bar chart shows the average ratings given to movies in each genre. It helps identify which genres are generally rated higher by users.")
@@ -253,37 +280,16 @@ def dashboard4():
         title="Average Ratings per Genre"
     )
     st.altair_chart(bar_chart, use_container_width=True)
-    st.write("**Observations and Insights:**")
+
+    st.write("**Observations and Insights for Average Ratings per Genre:**")
     st.write("- Genres such as 'Film-Noir' and 'Documentary' have the highest average ratings, indicating that these genres are particularly well-received by users.")
     st.write("- On the other hand, genres like 'Animation' and 'Horror' have lower average ratings, suggesting they may not be as favored by the audience.")
 
-    # User activity over time line chart
-    st.write("### User Activity Over Time")
-    st.write(f"This line chart displays the number of ratings provided by users each month from {start_date} to {end_date}. It helps identify trends and peak periods of user activity.")
-    line_chart = alt.Chart(user_activity_over_time).mark_line().encode(
-        x=alt.X('Month', title='Month'),
-        y=alt.Y('count', title='Number of Ratings'),
-        tooltip=['Month', 'count']
-    ).properties(
-        title="User Activity Over Time"
-    )
-    st.altair_chart(line_chart, use_container_width=True)
-    st.write("**Observations and Insights:**")
+    st.write("**Observations and Insights for User Activity Over Time:**")
     st.write("- The data shows a peak in user activity around December 2000, which might be due to a surge in new users or a seasonal increase in movie watching.")
     st.write("- After the peak, there is a significant drop in activity, which stabilizes at a lower level. This trend could indicate initial enthusiasm followed by a tapering off of regular usage.")
 
-    # Genre distribution pie chart
-    st.write("### Genre Distribution of Rated Movies")
-    st.write("This pie chart shows the distribution of genres among the rated movies. It highlights the most popular genres based on the number of ratings.")
-    pie_chart = alt.Chart(genre_distribution).mark_arc().encode(
-        theta=alt.Theta(field='Count', type='quantitative'),
-        color=alt.Color(field='Genres', type='nominal'),
-        tooltip=['Genres', 'Count']
-    ).properties(
-        title="Genre Distribution of Rated Movies"
-    )
-    st.altair_chart(pie_chart, use_container_width=True)
-    st.write("**Observations and Insights:**")
+    st.write("**Observations and Insights for Genre Distribution of Rated Movies:**")
     st.write("- The 'Drama' genre is the most rated, followed by 'Comedy' and 'Action', indicating these genres are the most popular among users.")
     st.write("- 'Film-Noir' and 'Documentary' genres, while having high average ratings, represent a smaller portion of the total ratings, suggesting they are niche but appreciated.")
 

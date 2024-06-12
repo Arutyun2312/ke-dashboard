@@ -36,7 +36,7 @@ def run():
 
     with st.sidebar:
         st.title('Select a Dashboard')
-        section = st.radio('Section', tuple(Section), format_func=lambda s: s.label)
+        section = st.radio('Dashboard', tuple(list(Section)[1:]), format_func=lambda s: s.label)
 
         if section not in [Section.intro, Section.movielens_4, Section.movielens_5]:
             st.title('Filters')
@@ -248,7 +248,8 @@ def run():
                     ).add_to(m)
 
                 # Title for the Streamlit app
-                st.title('Delivery Route Visualization')
+                st.subheader('Delivery Route Visualization')
+                st.write('Green - First delivery, Blue - Deliveries, Red - Last Delivery')
                 # Display the map in Streamlit
                 st_folium(m, use_container_width=True)
             else:

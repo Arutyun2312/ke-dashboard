@@ -112,16 +112,6 @@ def number_of_active_couriers(courier_id: str|None, region_id: str|None, month: 
             value=f'{active}',
             help='Number of couriers that have delivered at least once'
         ),
-        lambda : st.metric(
-            label="Inactive Couriers",
-            value=f'{len(inactive)}',
-            help='Number of couriers that have never delivered'
-        ),
-        lambda : st.metric(
-            label="Active Courier Percent",
-            value=f'{ratio:.1f}',
-            help='Percent of active couriers from total number of couriers'
-        )
     )
 
 def number_of_inactive_couriers(month: str|None):
@@ -331,9 +321,6 @@ def dashboard2(courier_id: int):
     # Geochart data preparation
     region_deliveries = courier_data.groupby('region_id').size().reset_index(name='count')
     geochart_data = region_deliveries.merge(region_centers()[['region_id', 'lat', 'lng']], on='region_id')
-
-    # Streamlit layout
-    st.title(f"Courier Performance Dashboard for Courier ID: {courier_id}")
 
     # Metrics in one row
     col1, col2 = st.columns(2)
