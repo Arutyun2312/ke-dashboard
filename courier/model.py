@@ -1,23 +1,21 @@
 from enum import StrEnum, auto
-import folium
 import streamlit as st
 import pandas as pd
 import altair as alt
 import util
-from streamlit_folium import st_folium
 import geopandas as gpd
 import json
 
 @st.cache_data
-def delivery_df():
+def __loading_delivery_df():
     if util.isDev():
         df = 'data/delivery_sh.csv'
         distance_df = 'data/delivery_courier_distances.csv'
         region_metric_df = 'data/delivery_region_metrics.csv'
     else:
-        df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc')
-        distance_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_courier_distances.csv?alt=media&token=9b414540-5afa-4794-948a-449866e1196c')
-        region_metric_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_region_metrics.csv?alt=media&token=734a4dc3-3ceb-482c-b4b7-2e3ff7fe7e02')
+        df = 'https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_sh.csv?alt=media&token=93b87698-b581-4cfb-a56b-1cc819c693fc'
+        distance_df = 'https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_courier_distances.csv?alt=media&token=9b414540-5afa-4794-948a-449866e1196c'
+        region_metric_df = 'https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/delivery_region_metrics.csv?alt=media&token=734a4dc3-3ceb-482c-b4b7-2e3ff7fe7e02'
 
     df = pd.read_csv(df)
     df['accept_time'] = pd.to_datetime(df['accept_time'], format='%m-%d %H:%M:%S')
@@ -28,6 +26,9 @@ def delivery_df():
     distance_df = pd.read_csv(distance_df)
     region_metric_df = pd.read_csv(region_metric_df)
     return df, distance_df, region_metric_df
+
+def delivery_df():
+    return [df.copy() for df in __loading_delivery_df()]
 
 @st.cache_data
 def region_centers():
@@ -59,6 +60,7 @@ class Section(StrEnum):
     courier_performance = auto()
     courier_route = auto()
     courier_table = auto()
+    movielens_4 = auto()
     if util.isDev():
         experimental = auto()
 
@@ -74,6 +76,8 @@ class Section(StrEnum):
             return 'Courier Route Inspection'
         if self == Section.courier_table:
             return 'Courier Table'
+        if self == Section.movielens_4:
+            return 'MovieLens4'
         if util.isDev() and self == Section.experimental:
             return 'Experimental'
 

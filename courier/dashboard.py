@@ -35,7 +35,7 @@ def run():
         return distance_df[mask][['distance', 'optimized_distance']]
 
     with st.sidebar:
-        st.title('Courier Dashboard Section')
+        st.title('Select a Dashboard')
         section = st.radio('Section', tuple(Section), format_func=lambda s: s.label)
 
         if section not in [Section.intro]:
@@ -209,6 +209,10 @@ def run():
             model.courier_list(courier_id, region_id, month)
         else:
             util.write_empty('Cannot show this section with the given filters. Please unselect the courier')
+    
+    if section == Section.movielens_4:
+        import movie.model
+        movie.model.dashboard4()
 
     if util.isDev() and section == Section.experimental:
         df, _, _ = model.delivery_df()

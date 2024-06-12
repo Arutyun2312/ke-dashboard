@@ -5,14 +5,15 @@ import util
 
 @st.cache_data
 def read_df():
-    movies_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/movies.dat?alt=media&token=d072d9af-bf42-412d-94b1-1754de96e465')
-    ratings_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/ratings.dat?alt=media&token=92e061cd-7208-4c88-813c-3072d2567c3b')
-    users_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/users.dat?alt=media&token=7c1ef0fd-d6ad-42fe-885d-2a90393a8340')
-
-    # data_dir = 'ml-1m/'
-    # movies_df = data_dir + 'movies.dat'
-    # ratings_df = data_dir + 'ratings.dat'
-    # users_df = data_dir + 'users.dat'
+    if util.isDev():
+        data_dir = 'data/ml-1m/'
+        movies_df = data_dir + 'movies.dat'
+        ratings_df = data_dir + 'ratings.dat'
+        users_df = data_dir + 'users.dat'
+    else:
+        movies_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/movies.dat?alt=media&token=d072d9af-bf42-412d-94b1-1754de96e465')
+        ratings_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/ratings.dat?alt=media&token=92e061cd-7208-4c88-813c-3072d2567c3b')
+        users_df = util.get_csv('https://firebasestorage.googleapis.com/v0/b/friendly-8b1c0.appspot.com/o/users.dat?alt=media&token=7c1ef0fd-d6ad-42fe-885d-2a90393a8340')
 
     movies_df = pd.read_csv(movies_df, sep='::', header=None, names=['MovieID', 'Title', 'Genres'], engine='python', encoding='latin1')
     movies_df['Genres'] = movies_df['Genres'].str.split('|')
@@ -202,3 +203,90 @@ def movie_genres():
     st.title("Movie Genre Popularity by IMDb WR")
     st.write("This bar chart shows the popularity of movie genres based on IMDb weighted ratings.")
     st.altair_chart(bar_chart, use_container_width=True)
+
+def dashboard4():
+    import streamlit as st
+    import pandas as pd
+    import altair as alt
+
+    # Reading data using the pre-defined function
+    movies_df, ratings_df, users_df = read_df()
+
+    # Calculate total number of users
+    total_users = users_df['UserID'].nunique()
+
+    # Calculate total number of ratings
+    total_ratings = ratings_df['Rating'].count()
+
+    # Calculate average ratings per genre
+    movies_exploded = movies_df.explode('Genres')
+    merged_df = ratings_df.merge(movies_exploded, on='MovieID')
+    average_ratings_per_genre = merged_df.groupby('Genres')['Rating'].mean().reset_index()
+
+    # Calculate user activity over time (number of ratings per month)
+    ratings_df['Timestamp'] = pd.to_datetime(ratings_df['Timestamp'], unit='s')
+    ratings_df['Month'] = ratings_df['Timestamp'].dt.to_period('M')
+    user_activity_over_time = ratings_df.groupby('Month').size().reset_index(name='count')
+    user_activity_over_time['Month'] = user_activity_over_time['Month'].dt.to_timestamp()
+
+    # Get the range of dates
+    start_date = ratings_df['Timestamp'].min().date()
+    end_date = ratings_df['Timestamp'].max().date()
+
+    # Calculate genre distribution of rated movies
+    genre_distribution = merged_df['Genres'].value_counts().reset_index()
+    genre_distribution.columns = ['Genres', 'Count']
+
+    # Streamlit layout
+    st.title("MovieLens User Engagement Dashboard")
+
+    # Metrics in one row
+    col1, col2 = st.columns(2)
+    col1.metric(label="Total Users", value=total_users, help="The total number of unique users in the dataset.")
+    col2.metric(label="Total Ratings", value=total_ratings, help="The total number of ratings provided by users.")
+
+    # Average ratings per genre bar chart
+    st.write("### Average Ratings per Genre")
+    st.write("This bar chart shows the average ratings given to movies in each genre. It helps identify which genres are generally rated higher by users.")
+    bar_chart = alt.Chart(average_ratings_per_genre).mark_bar().encode(
+        x=alt.X('Genres', title='Genre'),
+        y=alt.Y('Rating', title='Average Rating'),
+        tooltip=['Genres', 'Rating']
+    ).properties(
+        title="Average Ratings per Genre"
+    )
+    st.altair_chart(bar_chart, use_container_width=True)
+    st.write("**Observations and Insights:**")
+    st.write("- Genres such as 'Film-Noir' and 'Documentary' have the highest average ratings, indicating that these genres are particularly well-received by users.")
+    st.write("- On the other hand, genres like 'Animation' and 'Horror' have lower average ratings, suggesting they may not be as favored by the audience.")
+
+    # User activity over time line chart
+    st.write("### User Activity Over Time")
+    st.write(f"This line chart displays the number of ratings provided by users each month from {start_date} to {end_date}. It helps identify trends and peak periods of user activity.")
+    line_chart = alt.Chart(user_activity_over_time).mark_line().encode(
+        x=alt.X('Month', title='Month'),
+        y=alt.Y('count', title='Number of Ratings'),
+        tooltip=['Month', 'count']
+    ).properties(
+        title="User Activity Over Time"
+    )
+    st.altair_chart(line_chart, use_container_width=True)
+    st.write("**Observations and Insights:**")
+    st.write("- The data shows a peak in user activity around December 2000, which might be due to a surge in new users or a seasonal increase in movie watching.")
+    st.write("- After the peak, there is a significant drop in activity, which stabilizes at a lower level. This trend could indicate initial enthusiasm followed by a tapering off of regular usage.")
+
+    # Genre distribution pie chart
+    st.write("### Genre Distribution of Rated Movies")
+    st.write("This pie chart shows the distribution of genres among the rated movies. It highlights the most popular genres based on the number of ratings.")
+    pie_chart = alt.Chart(genre_distribution).mark_arc().encode(
+        theta=alt.Theta(field='Count', type='quantitative'),
+        color=alt.Color(field='Genres', type='nominal'),
+        tooltip=['Genres', 'Count']
+    ).properties(
+        title="Genre Distribution of Rated Movies"
+    )
+    st.altair_chart(pie_chart, use_container_width=True)
+    st.write("**Observations and Insights:**")
+    st.write("- The 'Drama' genre is the most rated, followed by 'Comedy' and 'Action', indicating these genres are the most popular among users.")
+    st.write("- 'Film-Noir' and 'Documentary' genres, while having high average ratings, represent a smaller portion of the total ratings, suggesting they are niche but appreciated.")
+
